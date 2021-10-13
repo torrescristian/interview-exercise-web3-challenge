@@ -1,34 +1,103 @@
 import { BigNumber } from "@ethersproject/bignumber";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { utils } from "ethers";
+import { ethers, network } from "hardhat";
+import { IERC20, Swapper } from "../typechain";
 
-describe("Swapper", function () {
-  it("Should get DAIs amount", async function () {
+describe("Swapper", () => {
+  let dai: IERC20;
+  let finalDaiBalance: number;
+  let owner: SignerWithAddress;
+  let swapper: Swapper;
+
+  before(async () => {
+    await network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl:
+              "https://eth-mainnet.alchemyapi.io/v2/erEEjAP53cFul9PPVKGKf6OhM7klh1l8",
+            blockNumber: 12103332,
+          },
+        },
+      ],
+    });
+
     const Swapper = await ethers.getContractFactory("Swapper");
-    const swapper = await Swapper.deploy();
+    [owner] = await ethers.getSigners();
+    swapper = await Swapper.connect(owner).deploy();
     await swapper.deployed();
+    dai = (await ethers.getContractAt(
+      "IERC20",
+      await swapper.daiAddress()
+    )) as unknown as IERC20;
+  });
+
+  it("should create an account with an empty balance", async () => {
+    const balance = await swapper.getBalance();
+    expect(balance.weth).to.equal(0);
+    expect(balance.dai).to.equal(0);
+  });
+
+  it("should provide one ether to the owner account", async () => {
+    const ONE_ETHER = ethers.utils.parseEther("1");
+
+    await swapper.provide({
+      value: ONE_ETHER,
+    });
+
+    const balance = await swapper.getBalance();
+    expect(balance.weth).to.equal(ONE_ETHER);
+    expect(balance.dai).to.equal(0);
+  });
+
+  it("should get an estimated amount of DAIs for WETHs", async () => {
+    const estimatedDai = await swapper.getEstimatedDAIForETH();
+    const formattedDai = parseBigNumberToNumber(estimatedDai);
+    expect(formattedDai).to.be.greaterThan(100);
+  });
+
+  it("should swap all the WETH for the maximum amount of DAIs", async () => {
+    const estimatedDais = parseBigNumberToNumber(
+      await swapper.getEstimatedDAIForETH()
+    );
+    await swapper.swap();
 
     const balance = await swapper.getBalance();
 
     expect(balance.weth).to.equal(0);
+
+    finalDaiBalance = parseBigNumberToNumber(balance.dai);
+    expect(finalDaiBalance).to.be.greaterThan(100);
+    expect(finalDaiBalance).to.be.equal(
+      estimatedDais,
+      `real dai price was "${finalDaiBalance}" instead of "${estimatedDais}"`
+    );
+  });
+
+  it("should be able to withdraw all DAI balance", async () => {
+    const initialBalance = await swapper.getBalance();
+
+    expect(initialBalance.weth).to.equal(0);
+    expect(parseBigNumberToNumber(initialBalance.dai)).to.be.equal(
+      finalDaiBalance
+    );
+
+    await swapper.withdraw();
+
+    const balance = await swapper.getBalance();
+    expect(balance.weth).to.equal(0);
     expect(balance.dai).to.equal(0);
 
-    const ethersToSend = 0.01;
-
-    swapper.provide({
-      value: ethers.utils.parseEther(String(ethersToSend)),
-    })
-    
-    expect(balance.weth).to.equal(BigNumber.from(ethersToSend * (10 ** 18)));
-    expect(balance.dai).to.equal(0);
-
-    // const estimatedDais = await swapper.getEstimatedDAIForETH();
-    // expect(estimatedDais).to.greaterThan(0);
-    // const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
-
-    // // wait until the transaction is mined
-    // await setGreetingTx.wait();
-
-    // expect(await greeter.greet()).to.equal("Hola, mundo!");
+    const ownerDaiBalance = parseBigNumberToNumber(
+      await dai.balanceOf(owner.address)
+    );
+    expect(ownerDaiBalance, "ownerDaiBalance").to.be.equal(finalDaiBalance);
   });
 });
+
+function parseBigNumberToNumber(daiAmount: BigNumber): number {
+  return Number(utils.formatEther(daiAmount));
+}

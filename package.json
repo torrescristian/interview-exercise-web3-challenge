@@ -33,6 +33,14 @@
     "typescript": "^4.4.3"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^4.3.2",
     "@uniswap/v2-periphery": "^1.1.0-beta.0"
+  },
+  "scripts": {
+    "fork": "npx hardhat node --fork https://eth-mainnet.alchemyapi.io/v2/erEEjAP53cFul9PPVKGKf6OhM7klh1l8 --fork-block-number 12103332",
+    "test": "npx hardhat test",
+    "test:localhost": "npx hardhat test --network localhost",
+    "compile": "npx hardhat compile",
+    "deploy": "npx hardhat run scripts/deploy.ts --network localhost"
   }
 }

@@ -28,6 +28,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: "https://eth-mainnet.alchemyapi.io/v2/erEEjAP53cFul9PPVKGKf6OhM7klh1l8",
+        blockNumber: 12103332
       }
     },
     ropsten: {

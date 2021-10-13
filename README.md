@@ -1,46 +1,129 @@
-# Advanced Sample Hardhat Project
+1.1
 
-This project demonstrates an advanced Hardhat use case, integrating other tools commonly used alongside Hardhat in the ecosystem.
+Create a swapper contract that:
+- [X] Has a fromToken and a toToken property, they can be both sent in the constructor.
+- [X] Has a provide(amount) function that will take the amount of the fromToken from the function caller.
+- [X] Has a swap function that will exchange all provided tokens into the toToken
+- [X] Has a withdraw function that allows the user that provided the tokens to withdraw the toTokens that he should be allowed to withdraw.
 
-The project comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts. It also comes with a variety of other tools, preconfigured to work with the project code.
+For the sake of simplicity: We can assume a 1 to 1 relationship between fromToken and toToken.
 
-Try running some of the following tasks:
+Tests:
+- [] All functions should be unit tested, fully. 
+- [] Swap function should be integration tested with a fork of mainnet (see hardhat mainnet forking)
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-npx hardhat help
-REPORT_GAS=true npx hardhat test
-npx hardhat coverage
-npx hardhat run scripts/deploy.ts
-TS_NODE_FILES=true npx ts-node scripts/deploy.ts
-npx eslint '**/*.{js,ts}'
-npx eslint '**/*.{js,ts}' --fix
-npx prettier '**/*.{json,sol,md}' --check
-npx prettier '**/*.{json,sol,md}' --write
-npx solhint 'contracts/**/*.sol'
-npx solhint 'contracts/**/*.sol' --fix
+1.2 (uniswap V2)
+
+change swap functionality to use uniswap-v2 pool (use WETH-DAI pair).
+add swap directly from ETH to DAI
+receive ETH directly for DAI
+
+// Ropsten network
+
+// FROM
+address ETH = 0xf70949bc9b52deffcda63b0d15608d601e3a7c49;
+// TO
+address DAI = 0xc715abcd34c8ed9ebbf95990e0c43401fbbc122d;
+
+1.3 (Nice to have)
+
+Create a job contract, that should comply to keep3r network interface, and that:
+
+- Has a work() function that can only be called every 10 minutes. This function work should call on Swapper.swap(). Effectively, allowing the swap to only be executed every 10 minutes.
+- Has a workable() returns (bool) function that returns true only if work can be executed. work should require(workable) 
+
+Tests:
+- All functions should be unit tested, fully. 
+- Integration tests add the SwapperJob to the keep3r network impersonating (check hardhat tooling) governance.
+- Integration tests add credits, and add job to the keep3r network.
+*/
+
+```sol
+contract Swapper_1_1 {
+    address fromToken;
+    address toToken;
+    mapping(address => mapping(address => uint)) ledger;
+
+    constructor(address _fromToken, address _toToken) {
+        fromToken = _fromToken;
+        toToken = _toToken;
+    }
+    
+    function provide(uint amount) external {
+        ledger[msg.sender][fromToken] = amount;
+    }
+    
+    function getBalance() external view returns(uint balanceTokenFrom, uint balanceTokenTo) {
+        balanceTokenFrom = ledger[msg.sender][fromToken];
+        balanceTokenTo = ledger[msg.sender][toToken];
+    }
+    
+    function swap() external {
+        mapping(address => uint) storage userBalance = ledger[msg.sender];
+
+        userBalance[toToken] += userBalance[fromToken];
+        userBalance[fromToken] = 0;
+    }
+    
+    function withdraw() external returns (uint) {
+        mapping(address => uint) storage userBalance = ledger[msg.sender];
+
+        uint amount = userBalance[toToken];
+        // some operation?
+        userBalance[toToken] = 0;
+        return amount;
+    }
+}
+
+
+interface UniswapV2Factory {
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+}
+
+interface UniswapV2Pair {
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+}
+*/
 ```
 
-# Etherscan verification
+1.2 (uniswap V2)
 
-To try out Etherscan verification, you first need to deploy a contract to an Ethereum network that's supported by Etherscan, such as Ropsten.
+change swap functionality to use uniswap-v2 pool (use WETH-DAI pair).
+add swap directly from ETH to DAI
+receive ETH directly for DAI
 
-In this project, copy the .env.example file to a file named .env, and then edit it to fill in the details. Enter your Etherscan API key, your Ropsten node URL (eg from Alchemy), and the private key of the account which will send the deployment transaction. With a valid .env file in place, first deploy your contract:
+// Ropsten network
 
-```shell
-hardhat run --network ropsten scripts/sample-script.ts
+// FROM
+address ETH = 0xf70949bc9b52deffcda63b0d15608d601e3a7c49;
+// TO
+address DAI = 0xc715abcd34c8ed9ebbf95990e0c43401fbbc122d;
+
+```sol
+abstract contract RouterInterface {
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external payable {}
+    
+    address public WETH;
+    
+     function getAmountsIn(uint amountOut, address[] memory path)
+        public
+        view
+        virtual
+        returns (uint[] memory amounts);
+        
+    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        virtual
+        returns (uint[] memory amounts);
+    
+}
 ```
-
-Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_ADDRESS` in this command:
-
-```shell
-npx hardhat verify --network ropsten DEPLOYED_CONTRACT_ADDRESS "Hello, Hardhat!"
-```
-
-# Performance optimizations
-
-For faster runs of your tests and scripts, consider skipping ts-node's type checking by setting the environment variable `TS_NODE_TRANSPILE_ONLY` to `1` in hardhat's environment. For more details see [the documentation](https://hardhat.org/guides/typescript.html#performance-optimizations).
