@@ -10,7 +10,6 @@ enum INDEX_OF {
 
 // 1.2 (uniswap V2)
 contract Swapper {
-  // state vars
   address public constant DAI_ADDRESS =
     0x6B175474E89094C44Da98b954EedeAC495271d0F;
   address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -19,13 +18,29 @@ contract Swapper {
 
   address constant FROM_TOKEN = WETH_ADDRESS;
   address constant TO_TOKEN = DAI_ADDRESS;
-
   mapping(address => mapping(address => uint)) ledger;
-
-  IUniswapV2Router02 private uniswapRouter;
+  IUniswapV2Router02 uniswapRouter;
+  bool locked = false;
 
   constructor() {
     uniswapRouter = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
+  }
+
+  modifier noReentrant {
+    require(!locked, 'This contract was being used, please try again');
+    locked = true;
+    _;
+    locked = false;
+  }
+
+  modifier mustHaveBalanceToSwap {
+    require(ledger[msg.sender][FROM_TOKEN] > 0, 'Your ETH account is empty');
+    _;
+  }
+
+  modifier mustHaveBalanceToWithdraw {
+    require(ledger[msg.sender][TO_TOKEN] > 0, 'Your DAI account is empty');
+    _;
   }
 
   function _getPathForETHToDAI() private pure returns (address[] memory) {
@@ -57,14 +72,14 @@ contract Swapper {
     return amounts[uint(INDEX_OF.DAI)];
   }
 
-  function provide() external payable {
+  function provide() external payable noReentrant {
     ledger[msg.sender][FROM_TOKEN] += msg.value;
   }
 
-  function swap() external {
+  function swap() external noReentrant mustHaveBalanceToSwap {
     mapping(address => uint) storage userBalance = ledger[msg.sender];
-
     uint deadline = block.timestamp + 15; // + 15 seg
+
     uint[] memory amounts = uniswapRouter.swapExactETHForTokens{
       value: userBalance[FROM_TOKEN]
     }(getEstimatedDAIForETH(), _getPathForETHToDAI(), address(this), deadline);
@@ -73,12 +88,9 @@ contract Swapper {
     userBalance[FROM_TOKEN] = 0;
   }
 
-  function withdraw() external returns (uint) {
+  function withdraw() external noReentrant mustHaveBalanceToWithdraw returns (uint) {
     mapping(address => uint) storage userBalance = ledger[msg.sender];
-
     uint amount = userBalance[TO_TOKEN];
-
-    assert(amount > 0);
 
     bool success = IERC20(DAI_ADDRESS).transfer(msg.sender, amount);
 
