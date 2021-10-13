@@ -1,5 +1,6 @@
 {
-  "name": "hardhat-project",
+  "name": "cristian-torres-defi-wonderland-challenge",
+  "version": "1.0.0",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-etherscan": "^2.1.6",
@@ -37,10 +38,10 @@
     "@uniswap/v2-periphery": "^1.1.0-beta.0"
   },
   "scripts": {
-    "fork": "npx hardhat node --fork https://eth-mainnet.alchemyapi.io/v2/erEEjAP53cFul9PPVKGKf6OhM7klh1l8 --fork-block-number 12103332",
-    "test": "npx hardhat test",
-    "test:localhost": "npx hardhat test --network localhost",
     "compile": "npx hardhat compile",
-    "deploy": "npx hardhat run scripts/deploy.ts --network localhost"
+    "localhost:deploy": "npx hardhat run scripts/deploy.ts --network localhost",
+    "localhost:fork": "npx hardhat node --fork https://eth-mainnet.alchemyapi.io/v2/erEEjAP53cFul9PPVKGKf6OhM7klh1l8 --fork-block-number 12103332",
+    "localhost:test": "npx hardhat test --network localhost",
+    "test": "npx hardhat test"
   }
 }

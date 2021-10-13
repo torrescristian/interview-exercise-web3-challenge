@@ -4,89 +4,87 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 enum INDEX_OF {
-    WETH,
-    DAI
+  WETH,
+  DAI
 }
 
 // 1.2 (uniswap V2)
 contract Swapper {
-    address constant uniswapV2FactoryAddress =
-        0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
-    address constant public daiAddress = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address constant wethAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address constant fromToken = wethAddress;
-    address constant toToken = daiAddress;
-    address constant UNISWAP_ROUTER_ADDRESS =
-        0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
+  // state vars
+  address public constant DAI_ADDRESS =
+    0x6B175474E89094C44Da98b954EedeAC495271d0F;
+  address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+  address constant UNISWAP_ROUTER_ADDRESS =
+    0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
 
-    mapping(address => mapping(address => uint256)) ledger;
+  address constant FROM_TOKEN = WETH_ADDRESS;
+  address constant TO_TOKEN = DAI_ADDRESS;
 
-    IUniswapV2Router02 private uniswapRouter;
+  mapping(address => mapping(address => uint)) ledger;
 
-    constructor() {
-        uniswapRouter = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
-    }
+  IUniswapV2Router02 private uniswapRouter;
 
-    function provide() external payable {
-        ledger[msg.sender][fromToken] += msg.value;
-    }
+  constructor() {
+    uniswapRouter = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
+  }
 
-    function getBalance() external view returns (uint256 weth, uint256 dai) {
-        weth = ledger[msg.sender][fromToken];
-        dai = ledger[msg.sender][toToken];
-    }
+  function _getPathForETHToDAI() private pure returns (address[] memory) {
+    address[] memory path = new address[](2);
 
-    function swap() external {
-        mapping(address => uint) storage userBalance = ledger[msg.sender];
-        
-        uint deadline = block.timestamp + 15;
-        uint[] memory amounts = uniswapRouter.swapExactETHForTokens{ value: userBalance[fromToken] }(
-            getEstimatedDAIForETH(),
-            getPathForETHToDAI(),
-            address(this),
-            deadline
-        );
+    path[uint(INDEX_OF.WETH)] = WETH_ADDRESS;
+    path[uint(INDEX_OF.DAI)] = DAI_ADDRESS;
 
-        userBalance[toToken] += amounts[uint(INDEX_OF.DAI)];
-        userBalance[fromToken] = 0;
-    }
+    return path;
+  }
 
-    function withdraw() external returns (uint256) {
-        mapping(address => uint256) storage userBalance = ledger[msg.sender];
+  function getBalance() external view returns (uint weth, uint dai) {
+    weth = ledger[msg.sender][FROM_TOKEN];
+    dai = ledger[msg.sender][TO_TOKEN];
+  }
 
-        uint256 amount = userBalance[toToken];
+  function getContractBalance() external view returns (uint) {
+    return address(this).balance;
+  }
 
-        assert(amount > 0);
+  function getEstimatedDAIForETH() public view returns (uint) {
+    mapping(address => uint) storage userBalance = ledger[msg.sender];
 
-        bool success = IERC20(daiAddress).transfer(msg.sender, amount);
+    uint[] memory amounts = uniswapRouter.getAmountsOut(
+      userBalance[FROM_TOKEN],
+      _getPathForETHToDAI()
+    );
 
-        assert(success);
+    return amounts[uint(INDEX_OF.DAI)];
+  }
 
-        userBalance[toToken] = 0;
-        return amount;
-    }
+  function provide() external payable {
+    ledger[msg.sender][FROM_TOKEN] += msg.value;
+  }
 
-    function getEstimatedDAIForETH() public view returns (uint256) {
-        mapping(address => uint256) storage userBalance = ledger[msg.sender];
+  function swap() external {
+    mapping(address => uint) storage userBalance = ledger[msg.sender];
 
-        uint256[] memory amounts = uniswapRouter.getAmountsOut(
-            userBalance[fromToken],
-            getPathForETHToDAI()
-        );
+    uint deadline = block.timestamp + 15; // + 15 seg
+    uint[] memory amounts = uniswapRouter.swapExactETHForTokens{
+      value: userBalance[FROM_TOKEN]
+    }(getEstimatedDAIForETH(), _getPathForETHToDAI(), address(this), deadline);
 
-        return amounts[uint(INDEX_OF.DAI)];
-    }
+    userBalance[TO_TOKEN] += amounts[uint(INDEX_OF.DAI)];
+    userBalance[FROM_TOKEN] = 0;
+  }
 
-    function getPathForETHToDAI() private pure returns (address[] memory) {
-        address[] memory path = new address[](2);
+  function withdraw() external returns (uint) {
+    mapping(address => uint) storage userBalance = ledger[msg.sender];
 
-        path[uint(INDEX_OF.WETH)] = wethAddress;
-        path[uint(INDEX_OF.DAI)] = daiAddress;
+    uint amount = userBalance[TO_TOKEN];
 
-        return path;
-    }
+    assert(amount > 0);
 
-    function contractBalance() external view returns (uint256) {
-        return address(this).balance;
-    }
+    bool success = IERC20(DAI_ADDRESS).transfer(msg.sender, amount);
+
+    assert(success);
+
+    userBalance[TO_TOKEN] = 0;
+    return amount;
+  }
 }

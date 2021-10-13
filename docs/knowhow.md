@@ -129,9 +129,3 @@ const balance = await dai.balanceOf(account.address);
 // transfer
 const transferTx: Promise<TransactionResponse> = await dai.connect(daiWhale).transfer(stranger.address, ethers.utils.parseEther('1'));
 ```
-
-# TODO
-- [] hacer una copia de la mainnet en una red local
-- [] probar los archivos .sol (o ver de correr UT) contra esa red local
-
-## 
