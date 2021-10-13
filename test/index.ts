@@ -1,13 +1,12 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
-import { utils } from "ethers";
 import { ethers, network } from "hardhat";
 import { IERC20, Swapper } from "../typechain";
 
 describe("Swapper", () => {
   let dai: IERC20;
-  let finalDaiBalance: number;
+  let finalDaiBalance: BigNumber;
   let owner: SignerWithAddress;
   let swapper: Swapper;
 
@@ -55,22 +54,19 @@ describe("Swapper", () => {
 
   it("should get an estimated amount of DAIs for WETHs", async () => {
     const estimatedDai = await swapper.getEstimatedDAIForETH();
-    const formattedDai = parseBigNumberToNumber(estimatedDai);
-    expect(formattedDai).to.be.greaterThan(100);
+    expect(estimatedDai.gt(100)).to.be.true;
   });
 
   it("should swap all the WETH for the maximum amount of DAIs", async () => {
-    const estimatedDais = parseBigNumberToNumber(
-      await swapper.getEstimatedDAIForETH()
-    );
+    const estimatedDais = await swapper.getEstimatedDAIForETH();
     await swapper.swap();
 
     const balance = await swapper.getBalance();
 
     expect(balance.weth).to.equal(0);
 
-    finalDaiBalance = parseBigNumberToNumber(balance.dai);
-    expect(finalDaiBalance).to.be.greaterThan(100);
+    finalDaiBalance = balance.dai;
+    expect(finalDaiBalance.gt(100)).to.be.true;
     expect(finalDaiBalance).to.be.equal(
       estimatedDais,
       `real dai price was "${finalDaiBalance}" instead of "${estimatedDais}"`
@@ -81,23 +77,15 @@ describe("Swapper", () => {
     const initialBalance = await swapper.getBalance();
 
     expect(initialBalance.weth).to.equal(0);
-    expect(parseBigNumberToNumber(initialBalance.dai)).to.be.equal(
-      finalDaiBalance
-    );
+    expect(initialBalance.dai).to.be.equal(finalDaiBalance);
 
     await swapper.withdraw();
 
-    const balance = await swapper.getBalance();
-    expect(balance.weth).to.equal(0);
-    expect(balance.dai).to.equal(0);
+    const finalBalance = await swapper.getBalance();
+    expect(finalBalance.weth).to.equal(0);
+    expect(finalBalance.dai).to.equal(0);
 
-    const ownerDaiBalance = parseBigNumberToNumber(
-      await dai.balanceOf(owner.address)
-    );
+    const ownerDaiBalance = await dai.balanceOf(owner.address);
     expect(ownerDaiBalance, "ownerDaiBalance").to.be.equal(finalDaiBalance);
   });
 });
-
-function parseBigNumberToNumber(daiAmount: BigNumber): number {
-  return Number(utils.formatEther(daiAmount));
-}
